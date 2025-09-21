@@ -1,0 +1,1015 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Color Spaces — Panels w/ Sliders & Restore Dock</title>
+    <style>
+      :root {
+        --bg: #0e0e10;
+        --panel: #111218;
+        --ring: #2a2e39;
+        --text: #e5e7eb;
+        --muted: #9aa1ad;
+      }
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--text);
+        font: 14px/1.4 system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+      }
+      header {
+        padding: 16px 20px;
+      }
+      header h1 {
+        margin: 0 0 4px;
+        font-size: 18px;
+      }
+      header p {
+        margin: 0;
+        color: var(--muted);
+      }
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 16px;
+        padding: 16px;
+        box-sizing: border-box;
+      }
+      @media (max-width: 1100px) {
+        .grid {
+          grid-template-columns: 1fr;
+        }
+      }
+      .panel {
+        position: relative;
+        background: var(--panel);
+        border: 1px solid var(--ring);
+        border-radius: 14px;
+        overflow: hidden;
+        height: 520px;
+        box-shadow: 0 8px 30px rgba(0, 0, 0, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.02);
+      }
+      .panel .title {
+        position: absolute;
+        left: 12px;
+        top: 10px;
+        z-index: 5;
+        padding: 6px 10px;
+        border-radius: 8px;
+        font-weight: 600;
+        background: rgba(0, 0, 0, 0.35);
+        backdrop-filter: blur(6px);
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+      }
+      .panel .controls {
+        position: absolute;
+        right: 10px;
+        top: 8px;
+        z-index: 5;
+        display: flex;
+        gap: 8px;
+      }
+      .panel button {
+        appearance: none;
+        border: 1px solid rgba(255, 255, 255, 0.15);
+        background: rgba(20, 20, 24, 0.6);
+        color: #fff;
+        border-radius: 8px;
+        padding: 6px 10px;
+        cursor: pointer;
+        font-weight: 600;
+        backdrop-filter: blur(6px);
+      }
+      .panel button:hover {
+        background: rgba(30, 30, 40, 0.7);
+      }
+      .panel button.close {
+        padding: 6px 9px;
+        border-radius: 50%;
+        width: 32px;
+        height: 32px;
+        line-height: 18px;
+      }
+      .view {
+        position: absolute;
+        left: 0;
+        right: 0;
+        top: 0;
+        height: 64%;
+        border-bottom: 1px solid var(--ring);
+      }
+      canvas.webgl {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        display: block;
+      }
+      .sliders {
+        position: absolute;
+        left: 0;
+        right: 0;
+        top: 64%;
+        height: 20%;
+        padding: 10px 12px;
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: 8px;
+        background: rgba(0, 0, 0, 0.25);
+      }
+      .row {
+        display: grid;
+        grid-template-columns: 54px 1fr 60px;
+        align-items: center;
+        gap: 10px;
+      }
+      .row label {
+        color: #cbd1db;
+        font-weight: 600;
+      }
+      .row output {
+        text-align: right;
+        font-variant-numeric: tabular-nums;
+        color: #e8eaef;
+      }
+      input[type="range"] {
+        width: 100%;
+        accent-color: #7aa0ff;
+      }
+      .status {
+        position: absolute;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        z-index: 4;
+        margin: 0 auto;
+        padding: 10px 14px;
+        text-align: center;
+        border-radius: 10px 10px 0 0;
+        max-width: min(92vw, 1200px);
+        box-shadow: 0 -8px 24px rgba(0, 0, 0, 0.25);
+        background: rgba(255, 255, 255, 0.75);
+        color: #000;
+      }
+      /* Restore Dock */
+      .dock {
+        position: fixed;
+        left: 16px;
+        bottom: 16px;
+        z-index: 2147483647;
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+        max-width: 80vw;
+      }
+      .dock button {
+        appearance: none;
+        border: 1px solid rgba(255, 255, 255, 0.18);
+        background: rgba(30, 32, 42, 0.8);
+        color: #fff;
+        border-radius: 10px;
+        padding: 8px 10px;
+        cursor: pointer;
+        font-weight: 700;
+        box-shadow: 0 6px 20px rgba(0, 0, 0, 0.35);
+        backdrop-filter: blur(6px);
+      }
+      .dock button:hover {
+        background: rgba(40, 42, 56, 0.85);
+      }
+    </style>
+    <!-- Import maps polyfill -->
+    <!-- Remove this when import maps will be widely supported -->
+    <script async src="https://unpkg.com/es-module-shims@1.3.6/dist/es-module-shims.js"></script>
+
+    <script type="importmap">
+      {
+        "imports": {
+          "three": "https://unpkg.com/three/build/three.module.js",
+          "three/addons/": "https://unpkg.com/three/examples/jsm/"
+        }
+      }
+    </script>
+  </head>
+  <body>
+    <header>
+      <h1>Color Spaces — Multi-Panel Visualizer</h1>
+      <p>
+        Each panel starts at a random index and updates once per second. Drag to orbit the 3D view. Hide a panel with
+        “×”; restore it from the dock below.
+      </p>
+    </header>
+
+    <section class="grid">
+      <div class="panel" id="rgbPanel"><div class="title">RGB (24-bit)</div></div>
+      <div class="panel" id="hsvPanel"><div class="title">HSV (discrete grid)</div></div>
+      <div class="panel" id="cmykPanel"><div class="title">CMYK → sRGB</div></div>
+      <div class="panel" id="srgbPanel"><div class="title">sRGB (24-bit codes)</div></div>
+    </section>
+
+    <!-- Restore Dock -->
+    <div class="dock" id="dock"></div>
+
+    <script type="module">
+      import * as THREE from "https://unpkg.com/three@0.160.0/build/three.module.js";
+      import { OrbitControls } from "https://unpkg.com/three@0.160.0/examples/jsm/controls/OrbitControls.js";
+
+      // ---------- shared utils ----------
+      const nf = new Intl.NumberFormat();
+      const fmt = (n) => nf.format(n);
+      const SECOND = 1000;
+
+      const dock = document.getElementById("dock");
+      const restoreButtons = {}; // id -> button
+
+      function addRestoreButton(panelId, label, onClick) {
+        if (restoreButtons[panelId]) return;
+        const btn = document.createElement("button");
+        btn.textContent = `Show ${label}`;
+        btn.onclick = () => onClick();
+        dock.appendChild(btn);
+        restoreButtons[panelId] = btn;
+      }
+      function removeRestoreButton(panelId) {
+        const btn = restoreButtons[panelId];
+        if (btn) {
+          btn.remove();
+          delete restoreButtons[panelId];
+        }
+      }
+
+      function fmtDurationSeconds(sec) {
+        sec = Math.max(0, Math.floor(sec));
+        const y = Math.floor(sec / 31536000);
+        sec %= 31536000;
+        const d = Math.floor(sec / 86400);
+        sec %= 86400;
+        const h = Math.floor(sec / 3600);
+        sec %= 3600;
+        const m = Math.floor(sec / 60);
+        const s = sec % 60;
+        return (
+          (y ? `${y}y ` : "") +
+          (y || d ? `${d}d ` : "") +
+          `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`
+        );
+      }
+      function setBarContrast(r, g, b, bar) {
+        const luma = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+        if (luma < 120) {
+          bar.style.color = "#fff";
+          bar.style.background = "rgba(0,0,0,.45)";
+        } else {
+          bar.style.color = "#000";
+          bar.style.background = "rgba(255,255,255,.75)";
+        }
+      }
+      const setSliderAccent = (el, cssColor) => {
+        el.style.accentColor = cssColor;
+      };
+
+      function makePanelScaffold(container) {
+        const view = document.createElement("div");
+        view.className = "view";
+        container.appendChild(view);
+        const canvas = document.createElement("canvas");
+        canvas.className = "webgl";
+        view.appendChild(canvas);
+
+        const sliders = document.createElement("div");
+        sliders.className = "sliders";
+        container.appendChild(sliders);
+
+        const status = document.createElement("div");
+        status.className = "status";
+        container.appendChild(status);
+        const controls = document.createElement("div");
+        controls.className = "controls";
+
+        const btnPause = document.createElement("button");
+        btnPause.textContent = "Pause";
+        const btnClose = document.createElement("button");
+        btnClose.textContent = "×";
+        btnClose.className = "close";
+        controls.appendChild(btnPause);
+        controls.appendChild(btnClose);
+        container.appendChild(controls);
+
+        return { view, canvas, sliders, status, btnPause, btnClose };
+      }
+
+      function makeRenderer(canvas, container) {
+        const r = new THREE.WebGLRenderer({ canvas, alpha: true, antialias: true });
+        r.setPixelRatio(Math.min(devicePixelRatio, 2));
+        const h = Math.round(container.clientHeight * 0.64);
+        r.setSize(container.clientWidth, h);
+        r.outputColorSpace = THREE.SRGBColorSpace;
+        return r;
+      }
+      function makeBasicScene(container, renderer, fov = 45, near = 0.1, far = 100) {
+        const scene = new THREE.Scene();
+        const camera = new THREE.PerspectiveCamera(
+          fov,
+          container.clientWidth / Math.round(container.clientHeight * 0.64),
+          near,
+          far
+        );
+        camera.position.set(2.2, 2.0, 2.2);
+        const controls = new OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.autoRotate = true;
+        controls.autoRotateSpeed = 0.5;
+
+        const dir = new THREE.DirectionalLight(0xffffff, 0.9);
+        dir.position.set(3, 4, 5);
+        const amb = new THREE.AmbientLight(0xffffff, 0.25);
+        scene.add(dir, amb);
+
+        function onResize() {
+          const w = container.clientWidth,
+            h = Math.round(container.clientHeight * 0.64);
+          renderer.setSize(w, h);
+          camera.aspect = w / h;
+          camera.updateProjectionMatrix();
+        }
+        window.addEventListener("resize", onResize);
+        return { scene, camera, controls, onResize };
+      }
+      function makeSliderRow(
+        parent,
+        labelText,
+        { min = 0, max = 255, step = 1, value = 0, color = "#7aa0ff" } = {},
+        onInput
+      ) {
+        const row = document.createElement("div");
+        row.className = "row";
+        const label = document.createElement("label");
+        label.textContent = labelText;
+        const input = document.createElement("input");
+        input.type = "range";
+        input.min = min;
+        input.max = max;
+        input.step = step;
+        input.value = value;
+        setSliderAccent(input, color);
+        const out = document.createElement("output");
+        out.textContent = value;
+        input.addEventListener("input", () => {
+          out.textContent = input.value;
+          onInput?.(Number(input.value));
+        });
+        row.appendChild(label);
+        row.appendChild(input);
+        row.appendChild(out);
+        parent.appendChild(row);
+        return { input, out, setAccent: (c) => setSliderAccent(input, c) };
+      }
+
+      // ---------- RGB (24-bit) ----------
+      function createRGBWidget(container, { startIndex, intervalMs = SECOND, gridSteps = 12 } = {}) {
+        const TOTAL = 256 * 256 * 256;
+        if (startIndex == null) startIndex = Math.floor(Math.random() * TOTAL);
+
+        const { view, canvas, sliders, status, btnPause, btnClose } = makePanelScaffold(container);
+        const renderer = makeRenderer(canvas, container);
+        const { scene, camera, controls } = makeBasicScene(container, renderer);
+
+        const box = new THREE.LineSegments(
+          new THREE.EdgesGeometry(new THREE.BoxGeometry(1, 1, 1)),
+          new THREE.LineBasicMaterial({ color: 0x888888 })
+        );
+        box.position.set(0.5, 0.5, 0.5);
+        scene.add(box);
+
+        const count = gridSteps ** 3;
+        const pos = new Float32Array(count * 3),
+          col = new Float32Array(count * 3);
+        let k = 0;
+        for (let xi = 0; xi < gridSteps; xi++) {
+          for (let yi = 0; yi < gridSteps; yi++) {
+            for (let zi = 0; zi < gridSteps; zi++) {
+              const x = xi / (gridSteps - 1),
+                y = yi / (gridSteps - 1),
+                z = zi / (gridSteps - 1);
+              pos[3 * k] = x;
+              pos[3 * k + 1] = y;
+              pos[3 * k + 2] = z;
+              col[3 * k] = x;
+              col[3 * k + 1] = y;
+              col[3 * k + 2] = z;
+              k++;
+            }
+          }
+        }
+        const geo = new THREE.BufferGeometry();
+        geo.setAttribute("position", new THREE.BufferAttribute(pos, 3));
+        geo.setAttribute("color", new THREE.BufferAttribute(col, 3));
+        scene.add(
+          new THREE.Points(
+            geo,
+            new THREE.PointsMaterial({ size: 0.02, vertexColors: true, transparent: true, opacity: 0.9 })
+          )
+        );
+
+        const marker = new THREE.Mesh(
+          new THREE.SphereGeometry(0.04, 32, 32),
+          new THREE.MeshStandardMaterial({ color: 0xffffff, emissive: 0x222222, metalness: 0.2, roughness: 0.4 })
+        );
+        scene.add(marker);
+
+        const sR = makeSliderRow(sliders, "R", { min: 0, max: 255, value: 0, color: "#ff3a3a" }, onR);
+        const sG = makeSliderRow(sliders, "G", { min: 0, max: 255, value: 0, color: "#27c34a" }, onG);
+        const sB = makeSliderRow(sliders, "B", { min: 0, max: 255, value: 0, color: "#2d7dff" }, onB);
+
+        let idx = startIndex % TOTAL,
+          paused = false,
+          hidden = false;
+
+        const idxToRGB = (i) => [(i >>> 16) & 255, (i >>> 8) & 255, i & 255];
+        const rgbToIdx = (r, g, b) => (r << 16) | (g << 8) | b;
+
+        function paintByIndex(i) {
+          const [r, g, b] = idxToRGB(i);
+          sR.input.value = r;
+          sR.out.textContent = r;
+          sG.input.value = g;
+          sG.out.textContent = g;
+          sB.input.value = b;
+          sB.out.textContent = b;
+          view.style.background = `rgb(${r}, ${g}, ${b})`;
+          setBarContrast(r, g, b, status);
+          marker.position.set(r / 255, g / 255, b / 255);
+          const remaining = TOTAL - (i + 1);
+          status.textContent = `RGB ${r},${g},${b}  •  ${fmt(i + 1)} of ${fmt(
+            TOTAL
+          )}  •  remaining: ${fmtDurationSeconds(remaining)}`;
+        }
+        function onR(v) {
+          paused = true;
+          btnPause.textContent = "Resume";
+          idx = rgbToIdx(v, +sG.input.value, +sB.input.value);
+          paintByIndex(idx);
+        }
+        function onG(v) {
+          paused = true;
+          btnPause.textContent = "Resume";
+          idx = rgbToIdx(+sR.input.value, v, +sB.input.value);
+          paintByIndex(idx);
+        }
+        function onB(v) {
+          paused = true;
+          btnPause.textContent = "Resume";
+          idx = rgbToIdx(+sR.input.value, +sG.input.value, v);
+          paintByIndex(idx);
+        }
+
+        paintByIndex(idx);
+        const timer = setInterval(() => {
+          if (!paused && !hidden) {
+            idx = (idx + 1) % TOTAL;
+            paintByIndex(idx);
+          }
+        }, intervalMs);
+
+        btnPause.onclick = () => {
+          paused = !paused;
+          btnPause.textContent = paused ? "Resume" : "Pause";
+          if (!paused) paintByIndex(idx);
+        };
+        btnClose.onclick = () => {
+          hidden = true;
+          container.style.display = "none";
+          paused = true;
+          btnPause.textContent = "Resume";
+          addRestoreButton("rgbPanel", "RGB", () => {
+            hidden = false;
+            container.style.display = "";
+            removeRestoreButton("rgbPanel");
+          });
+        };
+
+        (function raf() {
+          controls.update();
+          renderer.render(scene, camera);
+          requestAnimationFrame(raf);
+        })();
+      }
+
+      // ---------- HSV ----------
+      function createHSVWidget(
+        container,
+        {
+          H_STEPS = 360,
+          S_STEPS = 256,
+          V_STEPS = 256,
+          startIndex,
+          intervalMs = SECOND,
+          vizHue = 72,
+          vizSat = 16,
+          vizVal = 12,
+        } = {}
+      ) {
+        const TOTAL = H_STEPS * S_STEPS * V_STEPS;
+        if (startIndex == null) startIndex = Math.floor(Math.random() * TOTAL);
+
+        const { view, canvas, sliders, status, btnPause, btnClose } = makePanelScaffold(container);
+        const renderer = makeRenderer(canvas, container);
+        const { scene, camera, controls } = makeBasicScene(container, renderer);
+
+        const cylWire = new THREE.LineSegments(
+          new THREE.EdgesGeometry(new THREE.CylinderGeometry(1, 1, 1, 48, 6, true)),
+          new THREE.LineBasicMaterial({ color: 0x888888 })
+        );
+        cylWire.position.y = 0.5;
+        scene.add(cylWire);
+
+        function hsvToRgb(h, s, v) {
+          const c = v * s,
+            hp = (h % 360) / 60,
+            x = c * (1 - Math.abs((hp % 2) - 1));
+          let r = 0,
+            g = 0,
+            b = 0;
+          if (hp < 1) {
+            r = c;
+            g = x;
+          } else if (hp < 2) {
+            r = x;
+            g = c;
+          } else if (hp < 3) {
+            g = c;
+            b = x;
+          } else if (hp < 4) {
+            g = x;
+            b = c;
+          } else if (hp < 5) {
+            r = x;
+            b = c;
+          } else {
+            r = c;
+            b = x;
+          }
+          const m = v - c;
+          return [Math.round((r + m) * 255), Math.round((g + m) * 255), Math.round((b + m) * 255)];
+        }
+
+        // point cloud
+        const count = vizHue * vizSat * vizVal;
+        const pos = new Float32Array(count * 3),
+          col = new Float32Array(count * 3);
+        let k = 0;
+        for (let hi = 0; hi < vizHue; hi++) {
+          const h = hi * (360 / vizHue),
+            ang = (h * Math.PI) / 180;
+          for (let si = 0; si < vizSat; si++) {
+            const s = si / (vizSat - 1);
+            for (let vi = 0; vi < vizVal; vi++) {
+              const v = vi / (vizVal - 1);
+              pos[3 * k] = s * Math.cos(ang);
+              pos[3 * k + 1] = v;
+              pos[3 * k + 2] = s * Math.sin(ang);
+              const [r, g, b] = hsvToRgb(h, s, v);
+              col[3 * k] = r / 255;
+              col[3 * k + 1] = g / 255;
+              col[3 * k + 2] = b / 255;
+              k++;
+            }
+          }
+        }
+        const geo = new THREE.BufferGeometry();
+        geo.setAttribute("position", new THREE.BufferAttribute(pos, 3));
+        geo.setAttribute("color", new THREE.BufferAttribute(col, 3));
+        scene.add(
+          new THREE.Points(
+            geo,
+            new THREE.PointsMaterial({ size: 0.02, vertexColors: true, transparent: true, opacity: 0.9 })
+          )
+        );
+
+        const marker = new THREE.Mesh(
+          new THREE.SphereGeometry(0.045, 32, 32),
+          new THREE.MeshStandardMaterial({ color: 0xffffff, emissive: 0x222222 })
+        );
+        scene.add(marker);
+
+        const sH = makeSliderRow(sliders, "H", { min: 0, max: H_STEPS - 1, value: 0, color: "hsl(0 100% 50%)" }, onH);
+        const sS = makeSliderRow(sliders, "S", { min: 0, max: S_STEPS - 1, value: 0, color: "hsl(0 100% 50%)" }, onS);
+        const sV = makeSliderRow(sliders, "V", { min: 0, max: V_STEPS - 1, value: 0, color: "#aaaaaa" }, onV);
+
+        const updateHSVSliderAccents = (hi, si, vi) => {
+          const h = hi * (360 / H_STEPS),
+            s = si / (S_STEPS - 1),
+            v = vi / (V_STEPS - 1);
+          sH.setAccent(`hsl(${h} 100% 50%)`);
+          sS.setAccent(`hsl(${h} 100% 50%)`);
+          // Value slider: show brightness along the current hue (approx by mixing with white)
+          const [r, g, b] = hsvToRgb(h, 1, Math.max(0.25, v)); // brighter thumb
+          sV.setAccent(`rgb(${r},${g},${b})`);
+        };
+
+        let idx = startIndex % TOTAL,
+          paused = false,
+          hidden = false;
+        function idxToHSV(i) {
+          let n = i;
+          const h = n % H_STEPS;
+          n = Math.floor(n / H_STEPS);
+          const s = n % S_STEPS;
+          n = Math.floor(n / S_STEPS);
+          const v = n % V_STEPS;
+          return [h, s, v];
+        }
+        const hsvToIdx = (h, s, v) => h + H_STEPS * (s + S_STEPS * v);
+
+        function paintByIndex(i) {
+          const [hi, si, vi] = idxToHSV(i);
+          sH.input.value = hi;
+          sH.out.textContent = hi;
+          sS.input.value = si;
+          sS.out.textContent = si;
+          sV.input.value = vi;
+          sV.out.textContent = vi;
+          updateHSVSliderAccents(hi, si, vi);
+
+          const h = hi * (360 / H_STEPS),
+            s = si / (S_STEPS - 1),
+            v = vi / (V_STEPS - 1);
+          const [r, g, b] = hsvToRgb(h, s, v);
+          view.style.background = `rgb(${r}, ${g}, ${b})`;
+          setBarContrast(r, g, b, status);
+          const ang = (h * Math.PI) / 180;
+          marker.position.set(s * Math.cos(ang), v, s * Math.sin(ang));
+
+          const remaining = TOTAL - (i + 1);
+          status.textContent = `HSV h=${hi}/${H_STEPS} (${h.toFixed(1)}°)  s=${si}/${S_STEPS} (${(s * 100).toFixed(
+            1
+          )}%)  v=${vi}/${V_STEPS} (${(v * 100).toFixed(1)}%)  •  ${fmt(i + 1)} of ${fmt(
+            TOTAL
+          )}  •  remaining: ${fmtDurationSeconds(remaining)}`;
+        }
+        function onH(v) {
+          paused = true;
+          btnPause.textContent = "Resume";
+          idx = hsvToIdx(v, +sS.input.value, +sV.input.value);
+          paintByIndex(idx);
+        }
+        function onS(v) {
+          paused = true;
+          btnPause.textContent = "Resume";
+          idx = hsvToIdx(+sH.input.value, v, +sV.input.value);
+          paintByIndex(idx);
+        }
+        function onV(v) {
+          paused = true;
+          btnPause.textContent = "Resume";
+          idx = hsvToIdx(+sH.input.value, +sS.input.value, v);
+          paintByIndex(idx);
+        }
+
+        paintByIndex(idx);
+        const timer = setInterval(() => {
+          if (!paused && !hidden) {
+            idx = (idx + 1) % TOTAL;
+            paintByIndex(idx);
+          }
+        }, intervalMs);
+
+        btnPause.onclick = () => {
+          paused = !paused;
+          btnPause.textContent = paused ? "Resume" : "Pause";
+          if (!paused) paintByIndex(idx);
+        };
+        btnClose.onclick = () => {
+          hidden = true;
+          container.style.display = "none";
+          paused = true;
+          btnPause.textContent = "Resume";
+          addRestoreButton("hsvPanel", "HSV", () => {
+            hidden = false;
+            container.style.display = "";
+            removeRestoreButton("hsvPanel");
+          });
+        };
+
+        (function raf() {
+          controls.update();
+          renderer.render(scene, camera);
+          requestAnimationFrame(raf);
+        })();
+      }
+
+      // ---------- CMYK ----------
+      function createCMYKWidget(container, { bits = 8, startIndex, intervalMs = SECOND, gridSteps = 12 } = {}) {
+        const STEPS = 1 << bits;
+        const TOTAL = STEPS * STEPS * STEPS * STEPS;
+        if (startIndex == null) startIndex = Math.floor(Math.random() * TOTAL);
+
+        const { view, canvas, sliders, status, btnPause, btnClose } = makePanelScaffold(container);
+        const renderer = makeRenderer(canvas, container);
+        const { scene, camera, controls } = makeBasicScene(container, renderer);
+
+        const box = new THREE.LineSegments(
+          new THREE.EdgesGeometry(new THREE.BoxGeometry(1, 1, 1)),
+          new THREE.LineBasicMaterial({ color: 0x888888 })
+        );
+        box.position.set(0.5, 0.5, 0.5);
+        scene.add(box);
+
+        const cmykToRgb = (c, m, y, k) => [
+          Math.round(255 * (1 - c) * (1 - k)),
+          Math.round(255 * (1 - m) * (1 - k)),
+          Math.round(255 * (1 - y) * (1 - k)),
+        ];
+
+        const count = gridSteps ** 3;
+        const pos = new Float32Array(count * 3),
+          col = new Float32Array(count * 3);
+        let p = 0;
+        for (let ci = 0; ci < gridSteps; ci++) {
+          for (let mi = 0; mi < gridSteps; mi++) {
+            for (let yi = 0; yi < gridSteps; yi++) {
+              const C = ci / (gridSteps - 1),
+                M = mi / (gridSteps - 1),
+                Y = yi / (gridSteps - 1);
+              pos[3 * p] = C;
+              pos[3 * p + 1] = M;
+              pos[3 * p + 2] = Y;
+              p++;
+            }
+          }
+        }
+        const geo = new THREE.BufferGeometry();
+        geo.setAttribute("position", new THREE.BufferAttribute(pos, 3));
+        const colAttr = new THREE.BufferAttribute(col, 3);
+        geo.setAttribute("color", colAttr);
+        scene.add(
+          new THREE.Points(
+            geo,
+            new THREE.PointsMaterial({ size: 0.03, vertexColors: true, transparent: true, opacity: 0.95 })
+          )
+        );
+
+        const marker = new THREE.Mesh(
+          new THREE.SphereGeometry(0.045, 32, 32),
+          new THREE.MeshStandardMaterial({ color: 0xffffff, emissive: 0x222222 })
+        );
+        scene.add(marker);
+
+        const sC = makeSliderRow(sliders, "C", { min: 0, max: STEPS - 1, value: 0, color: "#00c4ff" }, onC);
+        const sM = makeSliderRow(sliders, "M", { min: 0, max: STEPS - 1, value: 0, color: "#ff3af2" }, onM);
+        const sY = makeSliderRow(sliders, "Y", { min: 0, max: STEPS - 1, value: 0, color: "#ffd400" }, onY);
+        const sK = makeSliderRow(sliders, "K", { min: 0, max: STEPS - 1, value: 0, color: "#111" }, onK);
+
+        let idx = startIndex % TOTAL,
+          paused = false,
+          hidden = false;
+
+        function idxToCMYK(i) {
+          const S = STEPS;
+          return [Math.floor(i / (S * S * S)) % S, Math.floor(i / (S * S)) % S, Math.floor(i / S) % S, i % S];
+        }
+        const cmykToIdx = (c, m, y, k) => ((c * STEPS + m) * STEPS + y) * STEPS + k;
+
+        function paintByIndex(i) {
+          const [ci, mi, yi, ki] = idxToCMYK(i);
+          sC.input.value = ci;
+          sC.out.textContent = ci;
+          sM.input.value = mi;
+          sM.out.textContent = mi;
+          sY.input.value = yi;
+          sY.out.textContent = yi;
+          sK.input.value = ki;
+          sK.out.textContent = ki;
+
+          const c = ci / (STEPS - 1),
+            m = mi / (STEPS - 1),
+            y = yi / (STEPS - 1),
+            k = ki / (STEPS - 1);
+          const [r, g, b] = cmykToRgb(c, m, y, k);
+
+          view.style.background = `rgb(${r}, ${g}, ${b})`;
+          setBarContrast(r, g, b, status);
+          marker.position.set(c, m, y);
+
+          // recolor lattice for current K
+          let j = 0;
+          for (let ci2 = 0; ci2 < gridSteps; ci2++) {
+            const C = ci2 / (gridSteps - 1);
+            for (let mi2 = 0; mi2 < gridSteps; mi2++) {
+              const M = mi2 / (gridSteps - 1);
+              for (let yi2 = 0; yi2 < gridSteps; yi2++) {
+                const Y = yi2 / (gridSteps - 1);
+                const [rr, gg, bb] = cmykToRgb(C, M, Y, k);
+                colAttr.array[3 * j] = rr / 255;
+                colAttr.array[3 * j + 1] = gg / 255;
+                colAttr.array[3 * j + 2] = bb / 255;
+                j++;
+              }
+            }
+          }
+          colAttr.needsUpdate = true;
+
+          const remaining = TOTAL - (i + 1);
+          status.textContent = `CMYK ${ci}/${STEPS - 1}, ${mi}/${STEPS - 1}, ${yi}/${STEPS - 1}, ${ki}/${
+            STEPS - 1
+          }  (${(c * 100).toFixed(1)}%, ${(m * 100).toFixed(1)}%, ${(y * 100).toFixed(1)}%, ${(k * 100).toFixed(
+            1
+          )}%)  •  ${fmt(i + 1)} of ${fmt(TOTAL)}  •  remaining: ${fmtDurationSeconds(remaining)}`;
+        }
+        function onC(v) {
+          paused = true;
+          btnPause.textContent = "Resume";
+          idx = cmykToIdx(v, +sM.input.value, +sY.input.value, +sK.input.value);
+          paintByIndex(idx);
+        }
+        function onM(v) {
+          paused = true;
+          btnPause.textContent = "Resume";
+          idx = cmykToIdx(+sC.input.value, v, +sY.input.value, +sK.input.value);
+          paintByIndex(idx);
+        }
+        function onY(v) {
+          paused = true;
+          btnPause.textContent = "Resume";
+          idx = cmykToIdx(+sC.input.value, +sM.input.value, v, +sK.input.value);
+          paintByIndex(idx);
+        }
+        function onK(v) {
+          paused = true;
+          btnPause.textContent = "Resume";
+          idx = cmykToIdx(+sC.input.value, +sM.input.value, +sY.input.value, v);
+          paintByIndex(idx);
+        }
+
+        paintByIndex(idx);
+        const timer = setInterval(() => {
+          if (!paused && !hidden) {
+            idx = (idx + 1) % TOTAL;
+            paintByIndex(idx);
+          }
+        }, intervalMs);
+
+        btnPause.onclick = () => {
+          paused = !paused;
+          btnPause.textContent = paused ? "Resume" : "Pause";
+          if (!paused) paintByIndex(idx);
+        };
+        btnClose.onclick = () => {
+          hidden = true;
+          container.style.display = "none";
+          paused = true;
+          btnPause.textContent = "Resume";
+          addRestoreButton("cmykPanel", "CMYK", () => {
+            hidden = false;
+            container.style.display = "";
+            removeRestoreButton("cmykPanel");
+          });
+        };
+
+        (function raf() {
+          controls.update();
+          renderer.render(scene, camera);
+          requestAnimationFrame(raf);
+        })();
+      }
+
+      // ---------- sRGB (same integer triplets as RGB here) ----------
+      function createSRGBWidget(container, { startIndex, intervalMs = SECOND, gridSteps = 12 } = {}) {
+        const TOTAL = 256 * 256 * 256;
+        if (startIndex == null) startIndex = Math.floor(Math.random() * TOTAL);
+
+        const { view, canvas, sliders, status, btnPause, btnClose } = makePanelScaffold(container);
+        const renderer = makeRenderer(canvas, container);
+        const { scene, camera, controls } = makeBasicScene(container, renderer);
+
+        const box = new THREE.LineSegments(
+          new THREE.EdgesGeometry(new THREE.BoxGeometry(1, 1, 1)),
+          new THREE.LineBasicMaterial({ color: 0x888888 })
+        );
+        box.position.set(0.5, 0.5, 0.5);
+        scene.add(box);
+
+        const count = gridSteps ** 3;
+        const pos = new Float32Array(count * 3),
+          col = new Float32Array(count * 3);
+        let k = 0;
+        for (let xi = 0; xi < gridSteps; xi++) {
+          for (let yi = 0; yi < gridSteps; yi++) {
+            for (let zi = 0; zi < gridSteps; zi++) {
+              const sr = xi / (gridSteps - 1),
+                sg = yi / (gridSteps - 1),
+                sb = zi / (gridSteps - 1);
+              pos[3 * k] = sr;
+              pos[3 * k + 1] = sg;
+              pos[3 * k + 2] = sb;
+              const c = new THREE.Color(sr, sg, sb);
+              c.convertSRGBToLinear();
+              col[3 * k] = c.r;
+              col[3 * k + 1] = c.g;
+              col[3 * k + 2] = c.b;
+              k++;
+            }
+          }
+        }
+        const geo = new THREE.BufferGeometry();
+        geo.setAttribute("position", new THREE.BufferAttribute(pos, 3));
+        geo.setAttribute("color", new THREE.BufferAttribute(col, 3));
+        scene.add(
+          new THREE.Points(
+            geo,
+            new THREE.PointsMaterial({ size: 0.02, vertexColors: true, transparent: true, opacity: 0.9 })
+          )
+        );
+
+        const marker = new THREE.Mesh(
+          new THREE.SphereGeometry(0.04, 32, 32),
+          new THREE.MeshStandardMaterial({ color: 0xffffff, emissive: 0x222222, metalness: 0.2, roughness: 0.4 })
+        );
+        scene.add(marker);
+
+        const sR = makeSliderRow(sliders, "R", { min: 0, max: 255, value: 0, color: "#ff3a3a" }, onR);
+        const sG = makeSliderRow(sliders, "G", { min: 0, max: 255, value: 0, color: "#27c34a" }, onG);
+        const sB = makeSliderRow(sliders, "B", { min: 0, max: 255, value: 0, color: "#2d7dff" }, onB);
+
+        let idx = startIndex % TOTAL,
+          paused = false,
+          hidden = false;
+        const idxToRGB = (i) => [(i >>> 16) & 255, (i >>> 8) & 255, i & 255];
+        const rgbToIdx = (r, g, b) => (r << 16) | (g << 8) | b;
+
+        function paintByIndex(i) {
+          const [r, g, b] = idxToRGB(i);
+          sR.input.value = r;
+          sR.out.textContent = r;
+          sG.input.value = g;
+          sG.out.textContent = g;
+          sB.input.value = b;
+          sB.out.textContent = b;
+          view.style.background = `rgb(${r}, ${g}, ${b})`;
+          setBarContrast(r, g, b, status);
+          marker.position.set(r / 255, g / 255, b / 255);
+          const remaining = TOTAL - (i + 1);
+          status.textContent = `sRGB ${r},${g},${b}  •  ${fmt(i + 1)} of ${fmt(
+            TOTAL
+          )}  •  remaining: ${fmtDurationSeconds(remaining)}`;
+        }
+        function onR(v) {
+          paused = true;
+          btnPause.textContent = "Resume";
+          idx = rgbToIdx(v, +sG.input.value, +sB.input.value);
+          paintByIndex(idx);
+        }
+        function onG(v) {
+          paused = true;
+          btnPause.textContent = "Resume";
+          idx = rgbToIdx(+sR.input.value, v, +sB.input.value);
+          paintByIndex(idx);
+        }
+        function onB(v) {
+          paused = true;
+          btnPause.textContent = "Resume";
+          idx = rgbToIdx(+sR.input.value, +sG.input.value, v);
+          paintByIndex(idx);
+        }
+
+        paintByIndex(idx);
+        const timer = setInterval(() => {
+          if (!paused && !hidden) {
+            idx = (idx + 1) % TOTAL;
+            paintByIndex(idx);
+          }
+        }, intervalMs);
+
+        btnPause.onclick = () => {
+          paused = !paused;
+          btnPause.textContent = paused ? "Resume" : "Pause";
+          if (!paused) paintByIndex(idx);
+        };
+        btnClose.onclick = () => {
+          hidden = true;
+          container.style.display = "none";
+          paused = true;
+          btnPause.textContent = "Resume";
+          addRestoreButton("srgbPanel", "sRGB", () => {
+            hidden = false;
+            container.style.display = "";
+            removeRestoreButton("srgbPanel");
+          });
+        };
+
+        (function raf() {
+          controls.update();
+          renderer.render(scene, camera);
+          requestAnimationFrame(raf);
+        })();
+      }
+
+      // ---------- bootstrap ----------
+      createRGBWidget(document.getElementById("rgbPanel"));
+      createHSVWidget(document.getElementById("hsvPanel"));
+      createCMYKWidget(document.getElementById("cmykPanel"));
+      createSRGBWidget(document.getElementById("srgbPanel"));
+    </script>
+  </body>
+</html>

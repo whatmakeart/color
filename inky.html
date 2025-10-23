@@ -1,0 +1,781 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Interactive Fluid Simulator</title>
+    <!-- Load Tailwind CSS for styling the UI -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+      /* Custom scrollbar for controls */
+      .controls-panel::-webkit-scrollbar {
+        width: 4px;
+      }
+      .controls-panel::-webkit-scrollbar-thumb {
+        background-color: rgba(0, 255, 255, 0.5);
+        border-radius: 4px;
+      }
+      .controls-panel::-webkit-scrollbar-track {
+        background-color: rgba(255, 255, 255, 0.1);
+      }
+      /* Style for slider thumbs */
+      input[type="range"]::-webkit-slider-thumb {
+        -webkit-appearance: none;
+        appearance: none;
+        width: 16px;
+        height: 16px;
+        border-radius: 50%;
+        background: #06b6d4; /* cyan-600 */
+        cursor: pointer;
+        border: 2px solid #fff;
+        margin-top: -6px; /* Center thumb on track */
+      }
+      input[type="range"]::-moz-range-thumb {
+        width: 16px;
+        height: 16px;
+        border-radius: 50%;
+        background: #06b6d4;
+        cursor: pointer;
+        border: 2px solid #fff;
+      }
+    </style>
+  </head>
+  <body class="bg-black overflow-hidden font-sans">
+    <!-- The main canvas for the animation -->
+    <canvas id="main-canvas" class="fixed inset-0 w-full h-full"></canvas>
+
+    <!-- Floating UI Controls Panel -->
+    <div id="controls-panel-container" class="fixed top-4 left-4 z-10 text-white transition-transform duration-300">
+      <div
+        id="controls-panel"
+        class="w-72 max-h-[90vh] overflow-y-auto controls-panel bg-gray-900/70 backdrop-blur-md rounded-lg shadow-2xl p-4 space-y-4">
+        <h1 class="text-xl font-bold text-cyan-300 border-b border-cyan-300/30 pb-2">Fluid Controls</h1>
+
+        <!-- Particle Count -->
+        <div class="space-y-1">
+          <label for="particleCount" class="text-sm font-medium flex justify-between">
+            <span>Particle Count</span>
+            <span id="particleCountValue" class="text-cyan-400 font-mono">5000</span>
+          </label>
+          <input
+            id="particleCount"
+            type="range"
+            min="1000"
+            max="15000"
+            step="100"
+            value="5000"
+            class="w-full h-1 bg-gray-700 rounded-lg appearance-none cursor-pointer range-sm" />
+        </div>
+
+        <!-- Friction (Damping) -->
+        <div class="space-y-1">
+          <label for="friction" class="text-sm font-medium flex justify-between">
+            <span>Friction (Damping)</span>
+            <span id="frictionValue" class="text-cyan-400 font-mono">0.95</span>
+          </label>
+          <input
+            id="friction"
+            type="range"
+            min="0.8"
+            max="0.99"
+            step="0.01"
+            value="0.95"
+            class="w-full h-1 bg-gray-700 rounded-lg appearance-none cursor-pointer range-sm" />
+        </div>
+
+        <!-- Swirl Strength -->
+        <div class="space-y-1">
+          <label for="swirlStrength" class="text-sm font-medium flex justify-between">
+            <span>Swirl Strength</span>
+            <span id="swirlStrengthValue" class="text-cyan-400 font-mono">0.10</span>
+          </label>
+          <input
+            id="swirlStrength"
+            type="range"
+            min="0"
+            max="0.5"
+            step="0.01"
+            value="0.1"
+            class="w-full h-1 bg-gray-700 rounded-lg appearance-none cursor-pointer range-sm" />
+        </div>
+
+        <!-- Swirl Complexity -->
+        <div class="space-y-1">
+          <label for="swirlComplexity" class="text-sm font-medium flex justify-between">
+            <span>Swirl Complexity</span>
+            <span id="swirlComplexityValue" class="text-cyan-400 font-mono">0.003</span>
+          </label>
+          <input
+            id="swirlComplexity"
+            type="range"
+            min="0.001"
+            max="0.01"
+            step="0.001"
+            value="0.003"
+            class="w-full h-1 bg-gray-700 rounded-lg appearance-none cursor-pointer range-sm" />
+        </div>
+
+        <!-- Repulsion Strength -->
+        <div class="space-y-1">
+          <label for="repulsionStrength" class="text-sm font-medium flex justify-between">
+            <span>Repulsion</span>
+            <span id="repulsionStrengthValue" class="text-cyan-400 font-mono">0.5</span>
+          </label>
+          <input
+            id="repulsionStrength"
+            type="range"
+            min="0"
+            max="1.5"
+            step="0.1"
+            value="0.5"
+            class="w-full h-1 bg-gray-700 rounded-lg appearance-none cursor-pointer range-sm" />
+        </div>
+
+        <!-- Mouse Push Strength -->
+        <div class="space-y-1">
+          <label for="mouseStrength" class="text-sm font-medium flex justify-between">
+            <span>Mouse Push</span>
+            <span id="mouseStrengthValue" class="text-cyan-400 font-mono">5.0</span>
+          </label>
+          <input
+            id="mouseStrength"
+            type="range"
+            min="0"
+            max="15"
+            step="0.1"
+            value="5"
+            class="w-full h-1 bg-gray-700 rounded-lg appearance-none cursor-pointer range-sm" />
+        </div>
+
+        <!-- Mouse Radius -->
+        <div class="space-y-1">
+          <label for="mouseRadius" class="text-sm font-medium flex justify-between">
+            <span>Mouse Radius</span>
+            <span id="mouseRadiusValue" class="text-cyan-400 font-mono">100</span>
+          </label>
+          <input
+            id="mouseRadius"
+            type="range"
+            min="20"
+            max="300"
+            step="10"
+            value="100"
+            class="w-full h-1 bg-gray-700 rounded-lg appearance-none cursor-pointer range-sm" />
+        </div>
+
+        <!-- Trail Opacity -->
+        <div class="space-y-1">
+          <label for="clearAlpha" class="text-sm font-medium flex justify-between">
+            <span>Trail Effect</span>
+            <span id="clearAlphaValue" class="text-cyan-400 font-mono">0.05</span>
+          </label>
+          <input
+            id="clearAlpha"
+            type="range"
+            min="0.01"
+            max="0.5"
+            step="0.01"
+            value="0.05"
+            class="w-full h-1 bg-gray-700 rounded-lg appearance-none cursor-pointer range-sm" />
+        </div>
+
+        <!-- Particle Size -->
+        <div class="space-y-1">
+          <label for="particleSize" class="text-sm font-medium flex justify-between">
+            <span>Particle Size</span>
+            <span id="particleSizeValue" class="text-cyan-400 font-mono">1.5</span>
+          </label>
+          <input
+            id="particleSize"
+            type="range"
+            min="0.5"
+            max="5"
+            step="0.1"
+            value="1.5"
+            class="w-full h-1 bg-gray-700 rounded-lg appearance-none cursor-pointer range-sm" />
+        </div>
+
+        <!-- Particle Alpha -->
+        <div class="space-y-1">
+          <label for="particleAlpha" class="text-sm font-medium flex justify-between">
+            <span>Particle Alpha</span>
+            <span id="particleAlphaValue" class="text-cyan-400 font-mono">0.7</span>
+          </label>
+          <input
+            id="particleAlpha"
+            type="range"
+            min="0.1"
+            max="1.0"
+            step="0.05"
+            value="0.7"
+            class="w-full h-1 bg-gray-700 rounded-lg appearance-none cursor-pointer range-sm" />
+        </div>
+
+        <!-- Action Buttons -->
+        <div class="grid grid-cols-2 gap-2 pt-2 border-t border-cyan-300/30">
+          <button
+            id="resetButton"
+            class="w-full bg-cyan-600 hover:bg-cyan-500 text-white font-semibold py-2 px-3 rounded-md transition-all duration-200 text-sm">
+            Reset
+          </button>
+          <button
+            id="autoAnimateButton"
+            class="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-semibold py-2 px-3 rounded-md transition-all duration-200 text-sm">
+            Auto
+          </button>
+          <button
+            id="autoMouseButton"
+            class="w-full bg-purple-600 hover:bg-purple-500 text-white font-semibold py-2 px-3 rounded-md transition-all duration-200 text-sm">
+            Auto-Mouse
+          </button>
+          <button
+            id="fullscreenButton"
+            title="Toggle Fullscreen"
+            class="w-full bg-gray-700 hover:bg-gray-600 text-white p-2 rounded-md transition-all duration-200 flex justify-center items-center">
+            <!-- Fullscreen Icon -->
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round">
+              <path
+                d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"></path>
+            </svg>
+          </button>
+        </div>
+      </div>
+
+      <!-- Toggle UI Button -->
+      <button
+        id="toggleUiButton"
+        title="Toggle Controls"
+        class="absolute -right-8 top-0 bg-gray-900/70 backdrop-blur-md text-white p-2 rounded-r-lg shadow-2xl">
+        <!-- Menu Icon -->
+        <svg
+          id="toggleIcon"
+          xmlns="http://www.w3.org/2000/svg"
+          width="16"
+          height="16"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round">
+          <path d="M15 18l-6-6 6-6" />
+        </svg>
+      </button>
+    </div>
+
+    <script>
+      const canvas = document.getElementById("main-canvas");
+      const ctx = canvas.getContext("2d");
+
+      // Control Panel Elements
+      const controlsContainer = document.getElementById("controls-panel-container");
+      const toggleUiButton = document.getElementById("toggleUiButton");
+      const toggleIcon = document.getElementById("toggleIcon");
+      const resetButton = document.getElementById("resetButton");
+      const autoAnimateButton = document.getElementById("autoAnimateButton");
+      const autoMouseButton = document.getElementById("autoMouseButton");
+      const fullscreenButton = document.getElementById("fullscreenButton");
+
+      // Sliders and Value Displays
+      const sliders = {
+        particleCount: document.getElementById("particleCount"),
+        friction: document.getElementById("friction"),
+        swirlStrength: document.getElementById("swirlStrength"),
+        swirlComplexity: document.getElementById("swirlComplexity"),
+        repulsionStrength: document.getElementById("repulsionStrength"),
+        mouseStrength: document.getElementById("mouseStrength"),
+        mouseRadius: document.getElementById("mouseRadius"),
+        clearAlpha: document.getElementById("clearAlpha"),
+        particleSize: document.getElementById("particleSize"),
+        particleAlpha: document.getElementById("particleAlpha"),
+      };
+
+      const values = {
+        particleCount: document.getElementById("particleCountValue"),
+        friction: document.getElementById("frictionValue"),
+        swirlStrength: document.getElementById("swirlStrengthValue"),
+        swirlComplexity: document.getElementById("swirlComplexityValue"),
+        repulsionStrength: document.getElementById("repulsionStrengthValue"),
+        mouseStrength: document.getElementById("mouseStrengthValue"),
+        mouseRadius: document.getElementById("mouseRadiusValue"),
+        clearAlpha: document.getElementById("clearAlphaValue"),
+        particleSize: document.getElementById("particleSizeValue"),
+        particleAlpha: document.getElementById("particleAlphaValue"),
+      };
+
+      // Configuration object to hold all parameters
+      let config = {
+        particleCount: 5000,
+        friction: 0.95,
+        swirlStrength: 0.1,
+        swirlComplexity: 0.003,
+        repulsionStrength: 0.5,
+        mouseStrength: 5,
+        mouseRadius: 100,
+        clearAlpha: 0.05,
+        particleSize: 1.5,
+        particleAlpha: 0.7,
+      };
+
+      let particles = [];
+      let mouse = {
+        x: window.innerWidth / 2,
+        y: window.innerHeight / 2,
+        down: false,
+      };
+
+      let isUiVisible = true;
+      let isAutoAnimating = false;
+      let isAutoMouse = false;
+      let baseHue = 0; // For global color cycling
+
+      // Parameters for automatic animation
+      const autoAnimParams = {
+        friction: { min: 0.9, max: 0.99, speed: 0.00003, offset: 0 },
+        swirlStrength: { min: 0.05, max: 0.4, speed: 0.00005, offset: 1 },
+        swirlComplexity: { min: 0.001, max: 0.01, speed: 0.00002, offset: 2 },
+        clearAlpha: { min: 0.02, max: 0.2, speed: 0.00004, offset: 3 },
+        particleSize: { min: 1.0, max: 3.0, speed: 0.00007, offset: 4 },
+        particleAlpha: { min: 0.2, max: 0.9, speed: 0.00006, offset: 5 },
+        repulsionStrength: { min: 0.1, max: 1.2, speed: 0.00004, offset: 6 },
+      };
+
+      // Simple Noise Generator for Auto-Mouse
+      class NoiseGenerator {
+        constructor(seed) {
+          this.f1 = (1 + seed * 0.01) * 0.7; // Slower frequencies
+          this.f2 = (3 + seed * 0.03) * 0.7;
+          this.f3 = (7 + seed * 0.07) * 0.7;
+          this.o1 = seed * 1.1;
+          this.o2 = seed * 2.2;
+          this.o3 = seed * 3.3;
+
+          this.a1 = 1;
+          this.a2 = 0.5;
+          this.a3 = 0.25;
+          this.totalAmp = this.a1 + this.a2 + this.a3;
+        }
+
+        getValue(time) {
+          let val = 0;
+          val += Math.sin(time * this.f1 + this.o1) * this.a1;
+          val += Math.sin(time * this.f2 + this.o2) * this.a2;
+          val += Math.sin(time * this.f3 + this.o3) * this.a3;
+          return val / this.totalAmp; // Normalize to -1 to 1
+        }
+      }
+
+      const noiseX = new NoiseGenerator(Math.random() * 100);
+      const noiseY = new NoiseGenerator(Math.random() * 100);
+      const noiseClick = new NoiseGenerator(Math.random() * 100);
+
+      // Spatial Grid for optimized collision/repulsion
+      class SpatialGrid {
+        constructor(width, height, cellSize) {
+          this.width = width;
+          this.height = height;
+          this.cellSize = cellSize;
+          this.gridWidth = Math.ceil(width / cellSize);
+          this.gridHeight = Math.ceil(height / cellSize);
+          this.grid = new Map();
+        }
+
+        _getKey(x, y) {
+          const cellX = Math.floor(x / this.cellSize);
+          const cellY = Math.floor(y / this.cellSize);
+          if (cellX < 0 || cellX >= this.gridWidth || cellY < 0 || cellY >= this.gridHeight) {
+            return null; // Out of bounds
+          }
+          return `${cellX}_${cellY}`;
+        }
+
+        insert(particle) {
+          const key = this._getKey(particle.x, particle.y);
+          if (key === null) return; // Don't insert out-of-bounds particles
+
+          if (!this.grid.has(key)) {
+            this.grid.set(key, []);
+          }
+          this.grid.get(key).push(particle);
+        }
+
+        getNearby(particle) {
+          const results = [];
+          const cellX = Math.floor(particle.x / this.cellSize);
+          const cellY = Math.floor(particle.y / this.cellSize);
+
+          for (let x = cellX - 1; x <= cellX + 1; x++) {
+            for (let y = cellY - 1; y <= cellY + 1; y++) {
+              if (x < 0 || x >= this.gridWidth || y < 0 || y >= this.gridHeight) {
+                continue;
+              }
+              const key = `${x}_${y}`;
+              if (this.grid.has(key)) {
+                results.push(...this.grid.get(key));
+              }
+            }
+          }
+          return results;
+        }
+
+        clear() {
+          this.grid.clear();
+        }
+      }
+
+      let grid; // Will be initialized in start()
+
+      // Particle Class
+      class Particle {
+        constructor() {
+          this.reset();
+          this.hue = Math.random() * 60; // Start in a blue/purple range
+        }
+
+        reset() {
+          this.x = Math.random() * canvas.width;
+          this.y = Math.random() * canvas.height;
+          this.vx = Math.random() * 0.2 - 0.1;
+          this.vy = Math.random() * 0.2 - 0.1;
+        }
+
+        update(time, grid) {
+          // 1. Apply Swirl Field (Flow Field)
+          const angle =
+            (Math.cos(this.x * config.swirlComplexity + time) + Math.sin(this.y * config.swirlComplexity + time)) * 2;
+          this.vx += Math.cos(angle) * config.swirlStrength;
+          this.vy += Math.sin(angle) * config.swirlStrength;
+
+          // 2. Apply Mouse Interaction
+          if (mouse.down) {
+            const dx = this.x - mouse.x;
+            const dy = this.y - mouse.y;
+            const dist = Math.sqrt(dx * dx + dy * dy);
+
+            if (dist < config.mouseRadius && dist > 0) {
+              const force = (config.mouseRadius - dist) / config.mouseRadius;
+              const pushX = (dx / dist) * force * config.mouseStrength;
+              const pushY = (dy / dist) * force * config.mouseStrength;
+              this.vx += pushX;
+              this.vy += pushY;
+            }
+          }
+
+          // 3. Apply Particle Repulsion
+          if (config.repulsionStrength > 0) {
+            const neighbors = grid.getNearby(this);
+            const collisionRadius = 5; // A small radius for interaction
+
+            for (const neighbor of neighbors) {
+              if (neighbor === this) continue;
+
+              const dx = this.x - neighbor.x;
+              const dy = this.y - neighbor.y;
+              const distSq = dx * dx + dy * dy;
+
+              if (distSq < collisionRadius * collisionRadius && distSq > 0) {
+                const dist = Math.sqrt(distSq);
+                const force = (collisionRadius - dist) / collisionRadius; // 0 to 1
+                const repulsion = force * config.repulsionStrength;
+                this.vx += (dx / dist) * repulsion * 0.5; // Apply half force
+                this.vy += (dy / dist) * repulsion * 0.5;
+              }
+            }
+          }
+
+          // 4. Apply Friction
+          this.vx *= config.friction;
+          this.vy *= config.friction;
+
+          // 5. Update Position
+          this.x += this.vx;
+          this.y += this.vy;
+
+          // 6. Handle Screen Boundaries (Wrap around)
+          if (this.x < 0) this.x = canvas.width;
+          if (this.x > canvas.width) this.x = 0;
+          if (this.y < 0) this.y = canvas.height;
+          if (this.y > canvas.height) this.y = 0;
+
+          // 7. Update Hue
+          this.hue = (this.hue + 0.5) % 360;
+        }
+
+        draw(ctx) {
+          // Use HSLA for transparency
+          ctx.fillStyle = `hsla(${baseHue + this.hue}, 100%, 70%, ${config.particleAlpha})`;
+          ctx.fillRect(this.x, this.y, config.particleSize, config.particleSize);
+        }
+      }
+
+      // --- Initialization and Event Handlers ---
+
+      function updateAutomation(timestamp) {
+        const updateParam = (key) => {
+          const params = autoAnimParams[key];
+          if (!params) return;
+
+          const range = params.max - params.min;
+          const normalizedSin = (Math.sin(timestamp * params.speed + params.offset) + 1) / 2;
+          const newValue = params.min + normalizedSin * range;
+
+          config[key] = newValue;
+          sliders[key].value = newValue;
+
+          const precision =
+            key === "friction" ||
+            key === "swirlStrength" ||
+            key === "clearAlpha" ||
+            key === "particleAlpha" ||
+            key === "repulsionStrength"
+              ? 2
+              : key === "swirlComplexity"
+              ? 3
+              : key === "particleSize"
+              ? 1
+              : 0;
+          values[key].textContent = newValue.toFixed(precision);
+        };
+
+        Object.keys(autoAnimParams).forEach(updateParam);
+      }
+
+      function setAutoAnimate(isOn) {
+        isAutoAnimating = isOn;
+        if (isAutoAnimating) {
+          autoAnimateButton.classList.remove("bg-indigo-600", "hover:bg-indigo-500");
+          autoAnimateButton.classList.add("bg-green-600", "hover:bg-green-500");
+          autoAnimateButton.textContent = "Auto (On)";
+        } else {
+          autoAnimateButton.classList.add("bg-indigo-600", "hover:bg-indigo-500");
+          autoAnimateButton.classList.remove("bg-green-600", "hover:bg-green-500");
+          autoAnimateButton.textContent = "Auto";
+        }
+      }
+
+      function setAutoMouse(isOn) {
+        isAutoMouse = isOn;
+        if (isAutoMouse) {
+          autoMouseButton.classList.remove("bg-purple-600", "hover:bg-purple-500");
+          autoMouseButton.classList.add("bg-green-600", "hover:bg-green-500");
+          autoMouseButton.textContent = "Mouse (On)";
+        } else {
+          autoMouseButton.classList.add("bg-purple-600", "hover:bg-purple-500");
+          autoMouseButton.classList.remove("bg-green-600", "hover:bg-green-500");
+          autoMouseButton.textContent = "Auto-Mouse";
+        }
+      }
+
+      function setupControlEvents() {
+        for (const key in sliders) {
+          sliders[key].addEventListener("input", (e) => {
+            if (isAutoAnimating) setAutoAnimate(false);
+
+            const value = parseFloat(e.target.value);
+            config[key] = value;
+            const precision =
+              key === "friction" ||
+              key === "swirlStrength" ||
+              key === "clearAlpha" ||
+              key === "particleAlpha" ||
+              key === "repulsionStrength"
+                ? 2
+                : key === "swirlComplexity"
+                ? 3
+                : key === "particleSize"
+                ? 1
+                : 0;
+            values[key].textContent = value.toFixed(precision);
+
+            if (key === "particleCount") {
+              initParticles();
+            }
+          });
+          // Initial sync
+          config[key] = parseFloat(sliders[key].value);
+          const precision =
+            key === "friction" ||
+            key === "swirlStrength" ||
+            key === "clearAlpha" ||
+            key === "particleAlpha" ||
+            key === "repulsionStrength"
+              ? 2
+              : key === "swirlComplexity"
+              ? 3
+              : key === "particleSize"
+              ? 1
+              : 0;
+          values[key].textContent = config[key].toFixed(precision);
+        }
+
+        resetButton.addEventListener("click", () => {
+          initParticles();
+        });
+
+        autoAnimateButton.addEventListener("click", () => {
+          setAutoAnimate(!isAutoAnimating);
+        });
+
+        autoMouseButton.addEventListener("click", () => {
+          setAutoMouse(!isAutoMouse);
+        });
+
+        fullscreenButton.addEventListener("click", toggleFullscreen);
+
+        toggleUiButton.addEventListener("click", () => {
+          isUiVisible = !isUiVisible;
+          if (isUiVisible) {
+            controlsContainer.style.transform = "translateX(0)";
+            toggleIcon.innerHTML = '<path d="M15 18l-6-6 6-6"/>'; // Chevron Left
+          } else {
+            controlsContainer.style.transform = "translateX(-100%)";
+            toggleIcon.innerHTML = '<path d="M9 18l6-6-6-6"/>'; // Chevron Right
+          }
+        });
+      }
+
+      function setupMouseEvents() {
+        const handleManualMouse = () => {
+          if (isAutoMouse) setAutoMouse(false);
+        };
+
+        window.addEventListener("mousemove", (e) => {
+          handleManualMouse();
+          mouse.x = e.clientX;
+          mouse.y = e.clientY;
+        });
+        window.addEventListener("mousedown", () => {
+          handleManualMouse();
+          mouse.down = true;
+        });
+        window.addEventListener("mouseup", () => {
+          handleManualMouse();
+          mouse.down = false;
+        });
+
+        window.addEventListener(
+          "touchstart",
+          (e) => {
+            handleManualMouse();
+            mouse.down = true;
+            if (e.touches.length > 0) {
+              mouse.x = e.touches[0].clientX;
+              mouse.y = e.touches[0].clientY;
+            }
+          },
+          { passive: false }
+        );
+
+        window.addEventListener(
+          "touchmove",
+          (e) => {
+            handleManualMouse();
+            if (e.touches.length > 0) {
+              mouse.x = e.touches[0].clientX;
+              mouse.y = e.touches[0].clientY;
+            }
+          },
+          { passive: false }
+        );
+
+        window.addEventListener("touchend", () => {
+          handleManualMouse();
+          mouse.down = false;
+        });
+      }
+
+      function resizeCanvas() {
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+        grid = new SpatialGrid(canvas.width, canvas.height, 20); // Re-init grid
+        initParticles();
+      }
+
+      function toggleFullscreen() {
+        if (!document.fullscreenElement) {
+          document.documentElement.requestFullscreen().catch((err) => {
+            console.error(`Error attempting to enable full-screen mode: ${err.message} (${err.name})`);
+          });
+        } else {
+          if (document.exitFullscreen) {
+            document.exitFullscreen();
+          }
+        }
+      }
+
+      // --- Core Logic ---
+
+      function initParticles() {
+        particles = [];
+        for (let i = 0; i < config.particleCount; i++) {
+          particles.push(new Particle());
+        }
+      }
+
+      function animate(timestamp) {
+        // 0. Update parameters if auto-animating
+        if (isAutoAnimating) {
+          updateAutomation(timestamp);
+        }
+
+        // 0.5. Update mouse if auto-mouse is on
+        if (isAutoMouse) {
+          let noiseTime = timestamp * 0.0001;
+          mouse.x = ((noiseX.getValue(noiseTime) + 1) / 2) * canvas.width;
+          mouse.y = ((noiseY.getValue(noiseTime) + 1) / 2) * canvas.height;
+          mouse.down = noiseClick.getValue(timestamp * 0.0008) > 0.4; // Slower click noise
+        }
+
+        // 1. Draw the semi-transparent background (creates trails)
+        ctx.fillStyle = `rgba(0, 0, 0, ${config.clearAlpha})`;
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        // 2. Get a time variable for smooth animation
+        const time = timestamp * 0.0003;
+        baseHue = (timestamp * 0.01) % 360;
+
+        // 3. Update grid
+        grid.clear();
+        particles.forEach((p) => grid.insert(p));
+
+        // 4. Update and Draw all particles
+        ctx.globalCompositeOperation = "lighter"; // Additive blending
+        particles.forEach((p) => {
+          p.update(time, grid); // Pass grid to update
+          p.draw(ctx);
+        });
+        ctx.globalCompositeOperation = "source-over"; // Reset blending
+
+        // 5. Request next frame
+        requestAnimationFrame(animate);
+      }
+
+      // --- Start ---
+      function start() {
+        setupControlEvents();
+        setupMouseEvents();
+        window.addEventListener("resize", resizeCanvas);
+
+        // Initial setup
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+        grid = new SpatialGrid(canvas.width, canvas.height, 20); // Cell size of 20px
+        initParticles();
+
+        // Start the animation
+        requestAnimationFrame(animate);
+      }
+
+      start();
+    </script>
+  </body>
+</html>
